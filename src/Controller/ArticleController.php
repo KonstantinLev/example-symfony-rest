@@ -2,8 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\Article;
 use App\Entity\ArticleRepository;
 use App\Form\Articles\CreateView;
+use App\Form\Articles\UpdateView;
 use App\Service\ArticleService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -65,5 +67,33 @@ class ArticleController extends AbstractController
         $article = $service->create($form);
         //$json = $this->serializer->serialize($data, 'json');
         return $this->json($article, Response::HTTP_CREATED);
+    }
+
+    /**
+     * @Route("/articles/{id}", name="articles.create", methods={"PUT", "PATCH"})
+     *
+     * @param Article $article
+     * @param Request $request
+     * @param ArticleService $service
+     * @return Response
+     */
+    public function putArticle(Article $article, Request $request, ArticleService $service): Response
+    {
+        $data = json_decode($request->getContent(), true);
+
+        $form = new UpdateView($article->getId());
+        $form->title = $data['title'] ?? null;
+        $form->content = $data['content'] ?? null;
+
+        $violations = $this->validator->validate($form);
+        if (\count($violations)) {
+            $json = $this->serializer->serialize($violations, 'json');
+            //return new JsonResponse($json, 400, [], true);
+            return $this->json($json, 400);
+        }
+
+        $article = $service->update($form);
+        //$json = $this->serializer->serialize($data, 'json');
+        return $this->json($article, Response::HTTP_OK);
     }
 }
