@@ -2,7 +2,6 @@
 
 namespace App\Controller;
 
-use App\Entity\Article;
 use App\Entity\ArticleRepository;
 use App\Form\Articles\CreateView;
 use App\Form\Articles\UpdateView;
@@ -23,6 +22,11 @@ class ArticleController extends AbstractController
     private $serializer;
     private $validator;
 
+    private $response = [
+        'errors' => null,
+        'data' => null
+    ];
+
     public function __construct(SerializerInterface $serializer, ValidatorInterface $validator)
     {
         $this->serializer = $serializer;
@@ -37,9 +41,9 @@ class ArticleController extends AbstractController
      */
     public function getArticles(ArticleRepository $articles): Response
     {
-        $data = $articles->repo->findAll();
+        $this->response['data'] = $articles->repo->findAll();
         //$json = $this->serializer->serialize($data, 'json');
-        return $this->json($data, Response::HTTP_OK);
+        return $this->json($this->response, Response::HTTP_OK);
     }
 
     /**
@@ -61,24 +65,34 @@ class ArticleController extends AbstractController
         if (\count($violations)) {
             $json = $this->serializer->serialize($violations, 'json');
             //return new JsonResponse($json, 400, [], true);
-            return $this->json($json, 400);
+            $this->response['errors'] = $json;
+            return $this->json($this->response, 400);
         }
 
         $article = $service->create($form);
+        $this->response['data'] = $article;
         //$json = $this->serializer->serialize($data, 'json');
-        return $this->json($article, Response::HTTP_CREATED);
+        return $this->json($this->response, Response::HTTP_CREATED);
     }
 
     /**
-     * @Route("/articles/{id}", name="articles.create", methods={"PUT", "PATCH"})
+     * @Route("/articles/{id}", name="articles.update", methods={"PUT", "PATCH"})
      *
-     * @param Article $article
+     * @param int $id
      * @param Request $request
+     * @param ArticleRepository $articles
      * @param ArticleService $service
      * @return Response
      */
-    public function putArticle(Article $article, Request $request, ArticleService $service): Response
+    public function putArticle(int $id, Request $request, ArticleRepository $articles, ArticleService $service): Response
     {
+        $article = $articles->repo->find($id);
+        if (!$article) {
+            $this->response['errors'] = 'Article with id '.$id.' does not exist!';
+            return $this->json($this->response, Response::HTTP_NOT_FOUND);
+            //throw new EntityNotFoundException('Article with id '.$id.' does not exist!');
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $form = new UpdateView($article->getId());
@@ -87,13 +101,19 @@ class ArticleController extends AbstractController
 
         $violations = $this->validator->validate($form);
         if (\count($violations)) {
-            $json = $this->serializer->serialize($violations, 'json');
+            $this->response['errors'] = $this->serializer->serialize($violations, 'json');
             //return new JsonResponse($json, 400, [], true);
-            return $this->json($json, 400);
+            return $this->json($this->response, 400);
         }
 
-        $article = $service->update($form);
+        try {
+            $article = $service->update($form);
+        } catch (\Exception $e) {
+            return $this->json($this->response, Response::HTTP_BAD_REQUEST);
+        }
+
+        $this->response['data'] = $article;
         //$json = $this->serializer->serialize($data, 'json');
-        return $this->json($article, Response::HTTP_OK);
+        return $this->json($this->response, Response::HTTP_OK);
     }
 }
